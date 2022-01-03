@@ -279,7 +279,7 @@ extension AudioBufferList {
 
 extension AVAudioPCMBuffer {
     
-    public func toStandardSampleBuffer(duration: CMTime? = nil, pts: CMTime? = nil, dts: CMTime? = nil) -> CMSampleBuffer? {
+    public func toStandardSampleBuffer(timescale:Int32 = 48000,duration: CMTime? = nil, pts: CMTime? = nil, dts: CMTime? = nil) -> CMSampleBuffer? {
         
         var sampleBuffer: CMSampleBuffer? = nil
         
@@ -287,7 +287,7 @@ extension AVAudioPCMBuffer {
         
         let new_pts = CMTimeMakeWithSeconds(CMTimeGetSeconds(based_pts), preferredTimescale: based_pts.timescale)
         
-        var timing = CMSampleTimingInfo(duration: CMTimeMake(value: 1, timescale: 44100), presentationTimeStamp: new_pts, decodeTimeStamp: CMTime.invalid)
+        var timing = CMSampleTimingInfo(duration: CMTimeMake(value: 1, timescale: timescale), presentationTimeStamp: new_pts, decodeTimeStamp: CMTime.invalid)
         
         var output_format = self.format
         
