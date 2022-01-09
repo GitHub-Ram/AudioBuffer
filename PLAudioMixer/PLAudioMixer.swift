@@ -25,7 +25,7 @@ public class PLAudioMixer: NSObject {
     
     public var processingFormat: AVAudioFormat
     
-    public var maximumFrameCount: AVAudioFrameCount = 1024
+    public var maximumFrameCount: AVAudioFrameCount = 960
     
     public weak var delegate: PLAudioMixerDelegate?
     
@@ -99,9 +99,9 @@ public class PLAudioMixer: NSObject {
             try self.audioEngine.start()
             
             for (_, source) in self.sources.enumerated() {
-                
+
                 source.playerNode.play()
-                
+
             }
             
             self.renderedBuffer = AVAudioPCMBuffer(pcmFormat: self.audioEngine.manualRenderingFormat, frameCapacity: self.audioEngine.manualRenderingMaximumFrameCount)
@@ -167,9 +167,7 @@ public class PLAudioMixer: NSObject {
             source.playerNode.scheduleBuffer(pcmBuffer, completionHandler: nil)
             
             source.samples += pcmBuffer.frameLength
-            
         }
-        
     }
     
     @discardableResult
@@ -178,11 +176,10 @@ public class PLAudioMixer: NSObject {
         guard let renderedBuffer = self.renderedBuffer else { return .error }
         
         let rendering_sources = self.sources.filter { (source) -> Bool in
-            
+            //print("source sample : \(source.identifier) : \(source.samples) limit:\(self.audioEngine.manualRenderingMaximumFrameCount)")
             return source.samples >= self.audioEngine.manualRenderingMaximumFrameCount
             
         }
-        
         if rendering_sources.count > 0 {
             
             let status = try! self.audioEngine.renderOffline(self.audioEngine.manualRenderingMaximumFrameCount, to: renderedBuffer)
@@ -196,7 +193,7 @@ public class PLAudioMixer: NSObject {
                 for (_, source) in rendering_sources.enumerated() {
                     
                     source.samples -= self.audioEngine.manualRenderingMaximumFrameCount
-                    
+                    //print("source sample left: \(source.identifier) : \(source.samples) limit:\(self.audioEngine.manualRenderingMaximumFrameCount)")
                 }
                 
                 return .success
@@ -279,15 +276,15 @@ extension AudioBufferList {
 
 extension AVAudioPCMBuffer {
     
-    public func toStandardSampleBuffer(duration: CMTime? = nil, pts: CMTime? = nil, dts: CMTime? = nil) -> CMSampleBuffer? {
+    public func toStandardSampleBuffer(timescale:Int32 = 48000,frameCount:Int64 ,duration: CMTime? = nil, pts: CMTime? = nil, dts: CMTime? = nil) -> CMSampleBuffer? {
         
         var sampleBuffer: CMSampleBuffer? = nil
         
         let based_pts = pts ?? CMTime.zero
         
-        let new_pts = CMTimeMakeWithSeconds(CMTimeGetSeconds(based_pts), preferredTimescale: based_pts.timescale)
+        //let new_pts = CMTimeMakeWithSeconds(CMTimeGetSeconds(based_pts), preferredTimescale: based_pts.timescale)
         
-        var timing = CMSampleTimingInfo(duration: CMTimeMake(value: 1, timescale: 44100), presentationTimeStamp: new_pts, decodeTimeStamp: CMTime.invalid)
+        var timing = CMSampleTimingInfo(duration: CMTimeMake(value: 1, timescale: timescale), presentationTimeStamp: CMTimeMake(value: frameCount, timescale: Int32(timescale)), decodeTimeStamp: CMTime.invalid)
         
         var output_format = self.format
         
@@ -311,12 +308,14 @@ extension AVAudioPCMBuffer {
             
         }
         
-        guard CMSampleBufferCreate(allocator: kCFAllocatorDefault, dataBuffer: nil, dataReady: false, makeDataReadyCallback: nil, refcon: nil, formatDescription: output_format.formatDescription, sampleCount: CMItemCount(self.frameLength), sampleTimingEntryCount: 1, sampleTimingArray: &timing, sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sampleBuffer) == noErr else { return nil }
-        
-        guard CMSampleBufferSetDataBufferFromAudioBufferList(sampleBuffer!, blockBufferAllocator: kCFAllocatorDefault, blockBufferMemoryAllocator: kCFAllocatorDefault, flags: 0, bufferList: pcmBuffer.audioBufferList) == noErr else {
-            
+        guard CMSampleBufferCreate(allocator: kCFAllocatorDefault, dataBuffer: nil, dataReady: false, makeDataReadyCallback: nil, refcon: nil, formatDescription: output_format.formatDescription, sampleCount: CMItemCount(self.frameLength), sampleTimingEntryCount: 1, sampleTimingArray: &timing, sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sampleBuffer) == noErr else {
             return nil
-            
+        }
+        
+        let error = CMSampleBufferSetDataBufferFromAudioBufferList(sampleBuffer!, blockBufferAllocator: kCFAllocatorDefault, blockBufferMemoryAllocator: kCFAllocatorDefault, flags: 0, bufferList: pcmBuffer.audioBufferList)
+        if error != noErr {
+            print("CMSampleBufferSetDataBufferFromAudioBufferList \(error)")
+            return nil
         }
         
         return sampleBuffer
